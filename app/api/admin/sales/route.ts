@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 type PrismaOrderResult = {
   id: string;
   customer_id: string;
-  table_number: number;
+  table_id: string;
   order_status: string;
   payment_status: string;
   total_amount: number;
@@ -15,6 +15,11 @@ type PrismaOrderResult = {
   kasir_id: string | null;
   created_at: Date;
   updated_at: Date;
+  table: {
+    id: string;
+    name: string;
+    desc: string | null;
+  };
   customer: {
     id: string;
     name: string | null;
@@ -44,7 +49,7 @@ type PrismaOrderResult = {
 interface APIOrder {
   id: string;
   customer_id: string;
-  table_number: number;
+  table_id: string;
   order_status: string;
   payment_status: string;
   total_amount: number;
@@ -53,6 +58,11 @@ interface APIOrder {
   kasir_id: string | null;
   created_at: Date;
   updated_at: Date;
+  table: {
+    id: string;
+    name: string;
+    desc: string | null;
+  };
   customer: {
     id: string;
     name: string | null;
@@ -98,7 +108,7 @@ export async function GET(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
 
-    // Fetch orders with related data
+    // Fetch orders with related data - FIXED: Added table to include
     const ordersFromDb = await prisma.order.findMany({
       where: {
         payment_status: "paid",
@@ -109,6 +119,13 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
+        table: {
+          select: {
+            id: true,
+            name: true,
+            desc: true,
+          },
+        },
         customer: {
           select: {
             id: true,

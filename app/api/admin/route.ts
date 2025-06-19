@@ -206,6 +206,12 @@ export async function GET() {
             menu: true,
           },
         },
+        table: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 

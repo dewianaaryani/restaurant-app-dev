@@ -27,6 +27,13 @@ export async function GET(
             },
           },
         },
+        table: {
+          select: {
+            id: true,
+            name: true,
+            desc: true,
+          },
+        },
         customer: {
           select: {
             id: true,

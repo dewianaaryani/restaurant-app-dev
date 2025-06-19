@@ -317,7 +317,7 @@ export default function AdminDashboard() {
                       {getStatusBadge(order.order_status)}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {order.customer.name} • Table {order.table_number}
+                      {order.customer.name} • {order.table.name}
                     </p>
                     <p className="text-sm">
                       {order.order_items

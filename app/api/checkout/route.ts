@@ -1,4 +1,3 @@
-// app/api/checkout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
@@ -6,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { OrderItem } from "@/types";
 
 interface CheckoutRequest {
-  tableNumber: number;
+  tableId: string; // Changed from tableNumber to tableId
   items: OrderItem[];
 }
 
@@ -29,16 +28,28 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CheckoutRequest = await request.json();
-    const { tableNumber, items } = body;
+    const { tableId, items } = body;
 
     // Debug: Log the incoming data
     console.log("Checkout request body:", JSON.stringify(body, null, 2));
     console.log("Items received:", items);
 
     // Validate request data
-    if (!tableNumber || !items || items.length === 0) {
+    if (!tableId || !items || items.length === 0) {
       return NextResponse.json(
-        { error: "Table number and items are required" },
+        { error: "Table ID and items are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate that the table exists
+    const table = await prisma.table.findUnique({
+      where: { id: tableId },
+    });
+
+    if (!table) {
+      return NextResponse.json(
+        { error: "Invalid table selected" },
         { status: 400 }
       );
     }
@@ -146,7 +157,7 @@ export async function POST(request: NextRequest) {
         const newOrder = await tx.order.create({
           data: {
             customer_id: session.user.id,
-            table_number: tableNumber,
+            table_id: tableId, // Changed from table_number to table_id
             order_status: "pending",
             payment_status: "pending",
             total_amount: totalAmount,
@@ -168,6 +179,7 @@ export async function POST(request: NextRequest) {
                 email: true,
               },
             },
+            table: true, // Include table information
           },
         });
 
@@ -183,7 +195,11 @@ export async function POST(request: NextRequest) {
           id: order.id,
           order_number: order.id.slice(-8).toUpperCase(),
           customer: order.customer,
-          table_number: order.table_number,
+          table: {
+            id: order.table.id,
+            name: order.table.name,
+            desc: order.table.desc,
+          },
           total_amount: order.total_amount,
           order_status: order.order_status,
           payment_status: order.payment_status,

@@ -64,7 +64,7 @@ export interface VerificationToken {
 export interface Order {
   id: string;
   customer_id: string;
-  table_number: number;
+  table_id: string;
   order_status: OrderStatus;
   payment_status: PaymentStatus;
   total_amount: number;
@@ -76,9 +76,17 @@ export interface Order {
 
   customer: User;
   kasir: User;
+  table: Table;
   order_items: OrderItem[];
 }
 
+export interface Table {
+  id: string;
+  name: string;
+  desc?: string | null;
+  created_at: string;
+  updated_at: string;
+}
 // OrderItem
 export interface OrderItem {
   id: string;

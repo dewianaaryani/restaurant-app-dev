@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 type PrismaOrderResult = {
   id: string;
   customer_id: string;
-  table_number: number;
+  table_id: string; // Changed from table_number to table_id
   order_status: string;
   payment_status: string;
   total_amount: number;
@@ -15,6 +15,11 @@ type PrismaOrderResult = {
   kasir_id: string | null;
   created_at: Date;
   updated_at: Date;
+  table: {
+    id: string;
+    name: string;
+    desc: string | null;
+  };
   customer: {
     id: string;
     name: string | null;
@@ -44,7 +49,7 @@ type PrismaOrderResult = {
 interface APIOrder {
   id: string;
   customer_id: string;
-  table_number: number;
+  table_id: string; // Changed from table_number to table_id
   order_status: string;
   payment_status: string;
   total_amount: number;
@@ -53,6 +58,11 @@ interface APIOrder {
   kasir_id: string | null;
   created_at: Date;
   updated_at: Date;
+  table: {
+    id: string;
+    name: string;
+    desc: string | null;
+  };
   customer: {
     id: string;
     name: string | null;
@@ -92,7 +102,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { type, startDate, endDate } = body;
 
-    // Fetch orders for the specified date range
+    // Fetch orders for the specified date range - FIXED: Added table to include
     const ordersFromDb = await prisma.order.findMany({
       where: {
         payment_status: "paid",
@@ -103,6 +113,13 @@ export async function POST(request: NextRequest) {
         },
       },
       include: {
+        table: {
+          select: {
+            id: true,
+            name: true,
+            desc: true,
+          },
+        },
         customer: {
           select: {
             id: true,
@@ -146,6 +163,30 @@ export async function POST(request: NextRequest) {
       .size;
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
+    // Group orders by table for additional insights
+    const tablePerformance = new Map<
+      string,
+      { name: string; revenue: number; orders: number }
+    >();
+    orders.forEach((order) => {
+      const tableKey = order.table.id;
+      if (!tablePerformance.has(tableKey)) {
+        tablePerformance.set(tableKey, {
+          name: order.table.name,
+          revenue: 0,
+          orders: 0,
+        });
+      }
+      const tableData = tablePerformance.get(tableKey)!;
+      tableData.revenue += order.total_amount;
+      tableData.orders += 1;
+    });
+
+    const topTables = Array.from(tablePerformance.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -161,6 +202,7 @@ export async function POST(request: NextRequest) {
           avgOrderValue,
         },
         reportData,
+        tablePerformance: topTables,
         generatedAt: new Date().toISOString(),
       },
     });
@@ -185,6 +227,7 @@ function processDailySales(orders: APIOrder[]) {
       revenue: number;
       orders: number;
       customers: Set<string>;
+      tables: Set<string>;
       avgOrderValue: number;
     }
   >();
@@ -201,6 +244,7 @@ function processDailySales(orders: APIOrder[]) {
         revenue: 0,
         orders: 0,
         customers: new Set(),
+        tables: new Set(),
         avgOrderValue: 0,
       });
     }
@@ -209,6 +253,7 @@ function processDailySales(orders: APIOrder[]) {
     dayData.revenue += revenue;
     dayData.orders += 1;
     dayData.customers.add(order.customer_id);
+    dayData.tables.add(order.table_id);
   });
 
   // Convert sets to counts and calculate averages
@@ -217,6 +262,7 @@ function processDailySales(orders: APIOrder[]) {
     revenue: day.revenue,
     orders: day.orders,
     customers: day.customers.size,
+    tables: day.tables.size,
     avgOrderValue: day.revenue / day.orders,
   }));
 
@@ -234,6 +280,7 @@ function processWeeklySales(orders: APIOrder[]) {
       revenue: number;
       orders: number;
       customers: Set<string>;
+      tables: Set<string>;
       avgOrderValue: number;
       growth: number;
     }
@@ -261,6 +308,7 @@ function processWeeklySales(orders: APIOrder[]) {
         revenue: 0,
         orders: 0,
         customers: new Set(),
+        tables: new Set(),
         avgOrderValue: 0,
         growth: 0,
       });
@@ -270,6 +318,7 @@ function processWeeklySales(orders: APIOrder[]) {
     weekData.revenue += revenue;
     weekData.orders += 1;
     weekData.customers.add(order.customer_id);
+    weekData.tables.add(order.table_id);
   });
 
   // Convert sets to counts and calculate averages
@@ -281,6 +330,7 @@ function processWeeklySales(orders: APIOrder[]) {
       revenue: week.revenue,
       orders: week.orders,
       customers: week.customers.size,
+      tables: week.tables.size,
       avgOrderValue: week.revenue / week.orders,
       growth: 0,
     }))

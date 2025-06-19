@@ -22,6 +22,7 @@ import {
   LogOut,
   FolderOpen,
   CreditCard,
+  Table,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,12 @@ const navigationItems: NavigationItem[] = [
     title: "Category Management",
     url: "/admin/categories",
     icon: FolderOpen,
+    roles: ["admin"],
+  },
+  {
+    title: "Table Management",
+    url: "/admin/tables",
+    icon: Table,
     roles: ["admin"],
   },
   {

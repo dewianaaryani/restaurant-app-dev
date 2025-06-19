@@ -82,7 +82,7 @@ model VerificationToken {
 model Order {
   id             String        @id @default(cuid())
   customer_id    String
-  table_number   Int
+  table_id       String
   order_status   OrderStatus   @default(pending)
   payment_status PaymentStatus @default(pending)
   total_amount   Int
@@ -93,9 +93,9 @@ model Order {
   updated_at     DateTime      @updatedAt @db.Timestamp(6)
 
   // Relations (pakai nama relasi unik)
-  customer User  @relation("CustomerOrders", fields: [customer_id], references: [id], onDelete: Cascade)
-  kasir    User? @relation("KasirOrders", fields: [kasir_id], references: [id], onDelete: Cascade)
-
+  customer    User        @relation("CustomerOrders", fields: [customer_id], references: [id], onDelete: Cascade)
+  kasir       User?       @relation("KasirOrders", fields: [kasir_id], references: [id], onDelete: Cascade)
+  table       Table       @relation(fields: [table_id], references: [id])
   order_items OrderItem[]
   User        User?       @relation(fields: [userId], references: [id])
   userId      String?
@@ -132,6 +132,18 @@ model Category {
   menus Menu[]
 
   @@map("categories")
+}
+
+model Table {
+  id         String   @id @default(cuid())
+  name       String   @db.VarChar(255)
+  desc       String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  Order Order[]
+
+  @@map("tables")
 }
 
 model Menu {

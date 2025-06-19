@@ -82,7 +82,7 @@ export default function OrderManagement() {
           order.id.toLowerCase().includes(query) ||
           order.customer.name?.toLowerCase().includes(query) ||
           order.customer.email.toLowerCase().includes(query) ||
-          order.table_number.toString().includes(query) ||
+          order.table.name.toLocaleLowerCase().includes(query) ||
           order.order_items.some((item) =>
             item.menu.name.toLowerCase().includes(query)
           )
@@ -394,7 +394,7 @@ export default function OrderManagement() {
                           {order.customer.name} • {order.customer.email}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Table {order.table_number} •{" "}
+                          {order.table.name} •{" "}
                           {new Date(order.order_time).toLocaleString()}
                         </p>
                         {order.kasir && (
@@ -480,7 +480,7 @@ export default function OrderManagement() {
                     {selectedOrder.customer.email}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Table {selectedOrder.table_number}
+                    {selectedOrder.table.name}
                   </p>
                 </div>
                 <div>

@@ -437,9 +437,9 @@ export default function OrderDetailPage({
                     Placed on {new Date(order.order_time).toLocaleDateString()}{" "}
                     at {new Date(order.order_time).toLocaleTimeString()}
                   </p>
-                  {order.table_number && (
+                  {order.table.name && (
                     <p className="text-sm text-muted-foreground">
-                      Table {order.table_number}
+                      Table {order.table.name}
                     </p>
                   )}
                 </div>

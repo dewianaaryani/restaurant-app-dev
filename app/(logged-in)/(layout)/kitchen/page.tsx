@@ -303,7 +303,7 @@ export default function KitchenDashboard() {
                           Order #{order.id.slice(-6).toUpperCase()}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
-                          {order.customer.name} • Table {order.table_number}
+                          {order.customer.name} • Table {order.table.name}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">

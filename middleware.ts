@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
   const routes = {
     public: ["/"],
     auth: ["/login", "/register"],
-    protected: ["/profile", "/kitchen", "/cashier"],
+    protected: ["/profile", "/kitchen", "/cashier", "/tables"],
     admin: ["/admin"],
     customer: ["/orders", "/menu"],
     kitchen: ["/kitchen"],

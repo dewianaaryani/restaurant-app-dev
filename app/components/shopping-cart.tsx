@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, X, Plus, Minus, Loader2 } from "lucide-react";
+import { ShoppingCart, X, Plus, Minus, Loader2, Table2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -21,12 +20,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { CartItem, useCart } from "@/context/cart-context";
 import { formatRupiah } from "@/utils/formatter";
 import { toast } from "sonner";
 import Link from "next/link";
+
+// Table interface matching your Prisma model
+interface Table {
+  id: string;
+  name: string;
+  desc: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export function ShoppingCartButton() {
   const { totalItems, isCartOpen, setIsCartOpen } = useCart();
@@ -52,19 +67,41 @@ function ShoppingCartPanel() {
   const { items, clearCart, subtotal, setIsCartOpen } = useCart();
   const [isCheckoutDialogOpen, setIsCheckoutDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
   const [checkoutInfo, setCheckoutInfo] = useState({
-    tableNumber: "",
+    tableId: "",
   });
 
-  const handleCheckout = async () => {
-    if (!checkoutInfo.tableNumber) {
-      toast.error("Please enter a table number");
-      return;
-    }
+  // Fetch available tables when checkout dialog opens
+  const fetchTables = async () => {
+    try {
+      setLoadingTables(true);
+      const response = await fetch("/api/admin/tables");
 
-    const tableNum = parseInt(checkoutInfo.tableNumber);
-    if (isNaN(tableNum) || tableNum <= 0) {
-      toast.error("Invalid table number");
+      if (!response.ok) {
+        throw new Error("Failed to fetch tables");
+      }
+
+      const data: Table[] = await response.json();
+      setTables(data);
+    } catch (error) {
+      console.error("Error fetching tables:", error);
+      toast.error("Failed to load tables");
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isCheckoutDialogOpen) {
+      fetchTables();
+    }
+  }, [isCheckoutDialogOpen]);
+
+  const handleCheckout = async () => {
+    if (!checkoutInfo.tableId) {
+      toast.error("Please select a table");
       return;
     }
 
@@ -77,7 +114,7 @@ function ShoppingCartPanel() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tableNumber: tableNum,
+          tableId: checkoutInfo.tableId,
           items: items.map((item) => ({
             id: item.id,
             name: item.name,
@@ -93,10 +130,9 @@ function ShoppingCartPanel() {
       if (!response.ok) {
         throw new Error(data.error || "Failed to place order");
       }
-      console.log(data);
 
       // Success
-      toast.success("Order placed successfully, Check your oder");
+      toast.success("Order placed successfully! Check your order.");
 
       // Clear cart and close dialogs
       clearCart();
@@ -105,7 +141,7 @@ function ShoppingCartPanel() {
 
       // Reset checkout info
       setCheckoutInfo({
-        tableNumber: "",
+        tableId: "",
       });
     } catch (error) {
       console.error("Checkout error:", error);
@@ -114,6 +150,10 @@ function ShoppingCartPanel() {
       setIsLoading(false);
     }
   };
+
+  const selectedTable = tables.find(
+    (table) => table.id === checkoutInfo.tableId
+  );
 
   return (
     <SheetContent className="w-full sm:max-w-md flex flex-col">
@@ -184,30 +224,65 @@ function ShoppingCartPanel() {
               <DialogHeader>
                 <DialogTitle>Complete Your Order</DialogTitle>
                 <DialogDescription>
-                  Please provide your table information to complete the order.
+                  Please select your table to complete the order.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="table" className="text-right">
-                    Table #*
+                    Table *
                   </Label>
-                  <Input
-                    id="table"
-                    type="number"
-                    min="1"
-                    placeholder="e.g. 5"
-                    value={checkoutInfo.tableNumber}
-                    onChange={(e) =>
-                      setCheckoutInfo({
-                        ...checkoutInfo,
-                        tableNumber: e.target.value,
-                      })
-                    }
-                    className="col-span-3"
-                    disabled={isLoading}
-                  />
+                  <div className="col-span-3">
+                    <Select
+                      value={checkoutInfo.tableId}
+                      onValueChange={(value) =>
+                        setCheckoutInfo({ ...checkoutInfo, tableId: value })
+                      }
+                      disabled={isLoading || loadingTables}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            loadingTables
+                              ? "Loading tables..."
+                              : "Select a table"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tables.map((table) => (
+                          <SelectItem key={table.id} value={table.id}>
+                            <div className="flex items-center space-x-2">
+                              <Table2 className="h-4 w-4" />
+                              <span>{table.name}</span>
+                              {table.desc && (
+                                <span className="text-muted-foreground text-sm">
+                                  - {table.desc}
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                {selectedTable && (
+                  <div className="grid grid-cols-4 items-start gap-4">
+                    <div className="text-right text-sm text-muted-foreground">
+                      Details:
+                    </div>
+                    <div className="col-span-3 text-sm">
+                      <p className="font-medium">{selectedTable.name}</p>
+                      {selectedTable.desc && (
+                        <p className="text-muted-foreground">
+                          {selectedTable.desc}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button
@@ -220,7 +295,7 @@ function ShoppingCartPanel() {
                 <Button
                   type="submit"
                   onClick={handleCheckout}
-                  disabled={isLoading || !checkoutInfo.tableNumber}
+                  disabled={isLoading || !checkoutInfo.tableId || loadingTables}
                   className="bg-orange-600 hover:bg-orange-700"
                 >
                   {isLoading ? (

@@ -20,7 +20,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
   CreditCard,
-  DollarSign,
   Receipt,
   CheckCircle,
   Clock,
@@ -115,7 +114,7 @@ RECEIPT
 Order ID: ${order.id}
 Date: ${new Date().toLocaleDateString()}
 Time: ${new Date().toLocaleTimeString()}
-Table: ${order.table_number}
+Table: ${order.table.name}
 Customer: ${order.customer.name}
 
 --------------------------------
@@ -185,7 +184,7 @@ Visit us again soon.
             <p><strong>Order ID:</strong> ${order.id}</p>
             <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
             <p><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
-            <p><strong>Table:</strong> ${order.table_number}</p>
+            <p><strong>Table:</strong> ${order.table.name}</p>
             <p><strong>Customer:</strong> ${order.customer.name}</p>
             
             <div class="separator"></div>
@@ -410,7 +409,7 @@ Visit us again soon.
                       <div>
                         <CardTitle className="text-lg">{order.id}</CardTitle>
                         <p className="text-sm text-muted-foreground">
-                          {order.customer.name} • Table {order.table_number}
+                          {order.customer.name} • Table {order.table.name}
                         </p>
                         <div className="flex items-center space-x-2 mt-1">
                           {getOrderStatusBadge(order.order_status)}
@@ -492,7 +491,7 @@ Visit us again soon.
                       <div>
                         <CardTitle className="text-lg">{order.id}</CardTitle>
                         <p className="text-sm text-muted-foreground">
-                          {order.customer.name} • Table {order.table_number}
+                          {order.customer.name} • Table {order.table.name}
                         </p>
                         <div className="flex items-center space-x-2 mt-1">
                           {getOrderStatusBadge(order.order_status)}
@@ -643,7 +642,7 @@ Visit us again soon.
 
                 <div className="border-t border-dashed pt-2 mb-2">
                   <p>Order: {selectedOrder.id}</p>
-                  <p>Table: {selectedOrder.table_number}</p>
+                  <p>Table: {selectedOrder.table.name}</p>
                   <p>Customer: {selectedOrder.customer.name}</p>
                   <p>Date: {new Date().toLocaleDateString()}</p>
                 </div>
