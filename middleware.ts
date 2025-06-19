@@ -48,6 +48,8 @@ export async function middleware(request: NextRequest) {
         return "/";
     }
   }
+  console.log("TOKEN:", token);
+  console.log("isAuthRoute:", isAuthRoute);
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && token) {
     console.log("Redirecting from auth route:", pathname, "Role:", token.role);
