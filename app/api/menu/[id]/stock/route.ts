@@ -22,7 +22,7 @@ interface StockUpdateRequest {
 // PUT - Update stock for a specific menu item
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -33,7 +33,7 @@ export async function PUT(
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body: StockUpdateRequest = await request.json();
 
     // Validate request body
@@ -146,12 +146,13 @@ export async function PUT(
     // Log error to database if possible
     try {
       const session = await auth();
+      const resolvedParams = await params;
       if (session?.user?.id) {
         await prisma.log.create({
           data: {
             user_id: session.user.id,
             action: "stock_error",
-            message: `Stock update failed for menu item ${params.id}: ${
+            message: `Stock update failed for menu item ${resolvedParams.id}: ${
               error instanceof Error ? error.message : "Unknown error"
             }`,
           },
@@ -178,10 +179,10 @@ export async function PUT(
 // GET - Get current stock for a specific menu item
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const menuItem = await prisma.menu.findUnique({
       where: { id },

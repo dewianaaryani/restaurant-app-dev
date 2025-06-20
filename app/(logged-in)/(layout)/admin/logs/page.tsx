@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { User, Activity, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface LogEntry {
   id: string;
@@ -180,13 +181,13 @@ const LogsPage = () => {
                 : "Loading..."}
             </p>
           </div>
-          <button
+          <Button
             onClick={handlePrint}
-            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="flex items-center px-4 py-2 rounded-lg transition-colors"
           >
             <Printer className="w-4 h-4 mr-2" />
             Print Logs
-          </button>
+          </Button>
         </div>
       </div>
 
