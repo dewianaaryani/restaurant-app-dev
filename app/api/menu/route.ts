@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
         categoryName: item.category.name,
         name: item.name,
         desc: item.desc,
+        stock: item.stock,
         price: item.price, // Keep as integer IDR (e.g., 25000 = Rp 25,000)
         image: item.image,
         is_available: item.is_available,

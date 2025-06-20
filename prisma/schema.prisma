@@ -59,6 +59,7 @@ model User {
   sessions Session[]
 
   // Restaurant app relations
+  logs           Log[]
   favorites      Favorite[]
   ratings        Rating[]
   Order          Order[]
@@ -121,6 +122,19 @@ model OrderItem {
   @@map("order_items")
 }
 
+model Log {
+  id         String   @id @default(cuid())
+  user_id    String?
+  action     String   @db.VarChar(100)
+  message    String   @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  // Relations
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@map("logs")
+}
+
 model Category {
   id         String   @id @default(cuid())
   name       String   @db.VarChar(255)
@@ -154,6 +168,7 @@ model Menu {
   image        String?  @db.VarChar(255)
   is_available Boolean  @default(true)
   price        Int
+  stock        Int      @default(100) // Add default value
   created_at   DateTime @default(now()) @db.Timestamp(6)
   updated_at   DateTime @updatedAt @db.Timestamp(6)
 

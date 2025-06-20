@@ -23,6 +23,7 @@ import {
   FolderOpen,
   CreditCard,
   Table,
+  LucideSquareTerminal,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,12 @@ const navigationItems: NavigationItem[] = [
     title: "Reports",
     url: "/admin/reports",
     icon: BarChart3,
+    roles: ["admin"],
+  },
+  {
+    title: "Logs",
+    url: "/admin/logs",
+    icon: LucideSquareTerminal,
     roles: ["admin"],
   },
 ];

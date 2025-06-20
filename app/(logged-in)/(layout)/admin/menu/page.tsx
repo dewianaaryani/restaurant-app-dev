@@ -42,7 +42,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Plus, Search, Edit, Trash2, Star, Loader2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Loader2, Package } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -59,7 +59,7 @@ interface MenuItem {
   image: string | null;
   is_available: boolean;
   price: number;
-  rating: number;
+  stock: number;
   created_at: string;
   updated_at: string;
 }
@@ -78,7 +78,7 @@ interface ApiError {
   details?: unknown;
 }
 
-// Form validation schema - Clean approach without type conflicts
+// Form validation schema
 const menuFormSchema = z.object({
   category_id: z.string().min(1, "Category is required"),
   name: z
@@ -90,11 +90,12 @@ const menuFormSchema = z.object({
     .number()
     .int()
     .positive("Price must be a positive number in IDR"),
+  stock: z.coerce.number().int().min(0, "Stock must be 0 or greater"),
   image: z
     .string()
     .optional()
     .refine((val) => {
-      if (!val || val === "") return true; // Allow empty
+      if (!val || val === "") return true;
       try {
         new URL(val.startsWith("http") ? val : `https://${val}`);
         return true;
@@ -106,7 +107,20 @@ const menuFormSchema = z.object({
   is_available: z.boolean(),
 });
 
+// Stock management form schema
+const stockFormSchema = z.object({
+  quantity: z.coerce
+    .number()
+    .int()
+    .positive("Quantity must be a positive number"),
+  action: z.enum(["add", "set", "subtract"], {
+    required_error: "Please select an action",
+  }),
+  reason: z.string().optional(),
+});
+
 type MenuFormData = z.infer<typeof menuFormSchema>;
+type StockFormData = z.infer<typeof stockFormSchema>;
 
 // Currency formatting utility
 const formatIDR = (amount: number): string => {
@@ -133,6 +147,11 @@ export default function MenuManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
 
+  // Stock management states
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const [stockItem, setStockItem] = useState<MenuItem | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
+
   const form = useForm<MenuFormData>({
     resolver: zodResolver(menuFormSchema),
     defaultValues: {
@@ -140,8 +159,18 @@ export default function MenuManagement() {
       name: "",
       desc: "",
       price: 0,
+      stock: 0,
       image: "",
       is_available: true,
+    },
+  });
+
+  const stockForm = useForm<StockFormData>({
+    resolver: zodResolver(stockFormSchema),
+    defaultValues: {
+      quantity: 0,
+      action: "add",
+      reason: "",
     },
   });
 
@@ -163,7 +192,7 @@ export default function MenuManagement() {
     }
   }, []);
 
-  // Fetch menu items - Fixed: Added useCallback to resolve dependency warning
+  // Fetch menu items
   const fetchMenuItems = useCallback(async () => {
     try {
       setLoading(true);
@@ -217,6 +246,7 @@ export default function MenuManagement() {
       name: "",
       desc: "",
       price: 0,
+      stock: 0,
       image: "",
       is_available: true,
     });
@@ -230,10 +260,65 @@ export default function MenuManagement() {
       name: item.name,
       desc: item.desc || "",
       price: item.price,
+      stock: item.stock,
       image: item.image || "",
       is_available: item.is_available,
     });
     setIsDialogOpen(true);
+  };
+
+  // Stock management handlers
+  const handleStockClick = (item: MenuItem) => {
+    setStockItem(item);
+    stockForm.reset({
+      quantity: 0,
+      action: "add",
+      reason: "",
+    });
+    setStockDialogOpen(true);
+  };
+
+  const onStockSubmit = async (data: StockFormData) => {
+    if (!stockItem) return;
+
+    setStockLoading(true);
+    try {
+      const response = await fetch(`/api/menu/${stockItem.id}/stock`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: data.action,
+          quantity: data.quantity,
+          reason: data.reason || undefined,
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to update stock");
+      }
+
+      // Update the menu item in the list
+      setMenuItems(
+        menuItems.map((item) =>
+          item.id === stockItem.id ? responseData.menu_item : item
+        )
+      );
+
+      toast.success(responseData.message || "Stock updated successfully");
+      setStockDialogOpen(false);
+      stockForm.reset();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update stock";
+      console.error("Error updating stock:", error);
+      toast.error(errorMessage);
+    } finally {
+      setStockLoading(false);
+    }
   };
 
   const onSubmit = async (data: MenuFormData) => {
@@ -333,6 +418,7 @@ export default function MenuManagement() {
           name: item.name,
           desc: item.desc,
           price: item.price,
+          stock: item.stock,
           image: item.image,
           is_available: !item.is_available,
         }),
@@ -373,6 +459,14 @@ export default function MenuManagement() {
     }
   };
 
+  const handleStockDialogClose = (open: boolean) => {
+    setStockDialogOpen(open);
+    if (!open) {
+      stockForm.reset();
+      setStockItem(null);
+    }
+  };
+
   // Filter items for display
   const filteredItems = menuItems.filter((item) => {
     if (availableOnly && !item.is_available) return false;
@@ -387,11 +481,8 @@ export default function MenuManagement() {
   });
 
   // Statistics
-  const availableItems = menuItems.filter((item) => item.is_available).length;
-  const avgRating =
-    menuItems.length > 0
-      ? menuItems.reduce((sum, item) => sum + item.rating, 0) / menuItems.length
-      : 0;
+  const lowStockItems = menuItems.filter((item) => item.stock <= 5).length;
+
   const avgPrice =
     menuItems.length > 0
       ? menuItems.reduce((sum, item) => sum + item.price, 0) / menuItems.length
@@ -493,29 +584,54 @@ export default function MenuManagement() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Price (IDR)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Enter price in IDR (e.g., 25000)"
-                          {...field}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            field.onChange(
-                              value === "" ? 0 : parseInt(value) || 0
-                            );
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price (IDR)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="25000"
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(
+                                value === "" ? 0 : parseInt(value) || 0
+                              );
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Initial Stock</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="100"
+                            {...field}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(
+                                value === "" ? 0 : parseInt(value) || 0
+                              );
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="image"
@@ -523,12 +639,10 @@ export default function MenuManagement() {
                     <FormItem>
                       <FormLabel>Image URL</FormLabel>
                       <FormControl>
-                        <div className="flex space-x-2">
-                          <Input
-                            placeholder="https://example.com/image.jpg"
-                            {...field}
-                          />
-                        </div>
+                        <Input
+                          placeholder="https://example.com/image.jpg"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -643,6 +757,18 @@ export default function MenuManagement() {
                         >
                           {item.is_available ? "Available" : "Unavailable"}
                         </Badge>
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.stock <= 5
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : item.stock <= 20
+                              ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                              : "bg-green-50 text-green-700 border-green-200"
+                          }
+                        >
+                          Stock: {item.stock}
+                        </Badge>
                       </div>
                     </div>
                     <div className="text-right">
@@ -653,14 +779,16 @@ export default function MenuManagement() {
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                      <div className="flex items-center">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
-                        {item.rating.toFixed(1)}
-                      </div>
-                    </div>
-
                     <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleStockClick(item)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Package className="h-4 w-4 mr-1" />
+                        Stock
+                      </Button>
                       <Switch
                         checked={item.is_available}
                         onCheckedChange={() => toggleAvailability(item)}
@@ -715,28 +843,13 @@ export default function MenuManagement() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Available Items
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{availableItems}</div>
-            <p className="text-xs text-muted-foreground">
-              {menuItems.length > 0
-                ? Math.round((availableItems / menuItems.length) * 100)
-                : 0}
-              % of total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Rating</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{avgRating.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">Overall rating</p>
+            <div className="text-2xl font-bold text-red-600">
+              {lowStockItems}
+            </div>
+            <p className="text-xs text-muted-foreground">Items ≤ 5 stock</p>
           </CardContent>
         </Card>
 
@@ -750,6 +863,135 @@ export default function MenuManagement() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stock Management Dialog */}
+      <Dialog open={stockDialogOpen} onOpenChange={handleStockDialogClose}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Manage Stock</DialogTitle>
+            <DialogDescription>
+              Update stock for &quot;{stockItem?.name}&quot;
+              <br />
+              Current stock: <strong>{stockItem?.stock || 0}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...stockForm}>
+            <form
+              onSubmit={stockForm.handleSubmit(onStockSubmit)}
+              className="space-y-4"
+            >
+              <FormField
+                control={stockForm.control}
+                name="action"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Action</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select action" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="add">
+                          Add to current stock
+                        </SelectItem>
+                        <SelectItem value="subtract">
+                          Subtract from stock
+                        </SelectItem>
+                        <SelectItem value="set">Set exact stock</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stockForm.control}
+                name="reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reason (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., New delivery, Inventory correction, Expired items"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-sm text-muted-foreground">
+                      Optional reason for this stock change (will be logged)
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stockForm.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {stockForm.watch("action") === "add"
+                        ? "Quantity to Add"
+                        : stockForm.watch("action") === "subtract"
+                        ? "Quantity to Subtract"
+                        : "New Stock Amount"}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="Enter quantity"
+                        {...field}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(
+                            value === "" ? 0 : parseInt(value) || 0
+                          );
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    {stockForm.watch("action") === "add" &&
+                      stockForm.watch("quantity") > 0 &&
+                      stockItem && (
+                        <p className="text-sm text-muted-foreground">
+                          New stock will be:{" "}
+                          {stockItem.stock + stockForm.watch("quantity")}
+                        </p>
+                      )}
+                    {stockForm.watch("action") === "subtract" &&
+                      stockForm.watch("quantity") > 0 &&
+                      stockItem && (
+                        <p className="text-sm text-muted-foreground">
+                          New stock will be:{" "}
+                          {Math.max(
+                            0,
+                            stockItem.stock - stockForm.watch("quantity")
+                          )}
+                        </p>
+                      )}
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStockDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={stockLoading}>
+                  {stockLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Update Stock
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

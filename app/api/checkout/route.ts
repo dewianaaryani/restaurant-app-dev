@@ -5,15 +5,15 @@ import { Prisma } from "@prisma/client";
 import { OrderItem } from "@/types";
 
 interface CheckoutRequest {
-  tableId: string; // Changed from tableNumber to tableId
+  tableId: string;
   items: OrderItem[];
 }
 
-// Types for database models
 type MenuItemWithAvailability = {
   id: string;
   name: string;
   price: number;
+  stock: number;
   is_available: boolean;
 };
 
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     const body: CheckoutRequest = await request.json();
     const { tableId, items } = body;
 
-    // Debug: Log the incoming data
     console.log("Checkout request body:", JSON.stringify(body, null, 2));
     console.log("Items received:", items);
 
@@ -79,21 +78,16 @@ export async function POST(request: NextRequest) {
         {
           error: "All items must have valid ID and quantity",
           invalid_items: invalidItems,
-          debug_info: {
-            total_items: items.length,
-            invalid_count: invalidItems.length,
-          },
         },
         { status: 400 }
       );
     }
 
-    // Extract valid menu IDs (filter out any null/undefined values)
+    // Extract valid menu IDs
     const menuIds = items
       .map((item) => item.id)
       .filter((id): id is string => Boolean(id));
 
-    // Double-check we still have items after filtering
     if (menuIds.length === 0) {
       return NextResponse.json(
         { error: "No valid menu items found" },
@@ -101,7 +95,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate that all menu items exist and are available
+    // Validate that all menu items exist, are available, and have sufficient stock
     const menuItems = await prisma.menu.findMany({
       where: {
         id: { in: menuIds },
@@ -122,6 +116,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check stock availability
+    const stockErrors = [];
+    for (const item of items) {
+      const menuItem = menuItems.find((menu) => menu.id === item.id);
+      if (menuItem && menuItem.stock < item.quantity) {
+        stockErrors.push({
+          menu_id: item.id,
+          menu_name: menuItem.name,
+          requested: item.quantity,
+          available: menuItem.stock,
+        });
+      }
+    }
+
+    if (stockErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Insufficient stock for some items",
+          stock_errors: stockErrors,
+        },
+        { status: 400 }
+      );
+    }
+
     // Calculate total amount
     let totalAmount = 0;
     const orderItemsData = items.map((item) => {
@@ -132,12 +150,10 @@ export async function POST(request: NextRequest) {
         throw new Error(`Menu item ${item.id} not found`);
       }
 
-      // Validate quantity
       if (!item.quantity || item.quantity <= 0) {
         throw new Error(`Invalid quantity for item ${item.id}`);
       }
 
-      // Use the price from database, not from client
       const subtotal = menuItem.price * item.quantity;
       totalAmount += subtotal;
 
@@ -150,14 +166,14 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Create order with order items in a transaction
+    // Create order with order items, update stock, and log in a transaction
     const order = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         // Create the order
         const newOrder = await tx.order.create({
           data: {
             customer_id: session.user.id,
-            table_id: tableId, // Changed from table_number to table_id
+            table_id: tableId,
             order_status: "pending",
             payment_status: "pending",
             total_amount: totalAmount,
@@ -179,9 +195,50 @@ export async function POST(request: NextRequest) {
                 email: true,
               },
             },
-            table: true, // Include table information
+            table: true,
           },
         });
+
+        // Update stock for each menu item
+        for (const item of items) {
+          await tx.menu.update({
+            where: { id: item.id },
+            data: {
+              stock: {
+                decrement: item.quantity,
+              },
+            },
+          });
+        }
+
+        // Create log entry for order creation
+        await tx.log.create({
+          data: {
+            user_id: session.user.id,
+            action: "order_created",
+            message: `Order ${newOrder.id
+              .slice(-8)
+              .toUpperCase()} created for table ${table.name} with ${
+              items.length
+            } items. Total: ${totalAmount}`,
+          },
+        });
+
+        // Create log entries for stock updates
+        for (const item of items) {
+          const menuItem = menuItems.find((menu) => menu.id === item.id);
+          if (menuItem) {
+            await tx.log.create({
+              data: {
+                user_id: session.user.id,
+                action: "stock_updated",
+                message: `Stock reduced for ${menuItem.name}: -${
+                  item.quantity
+                } (Order: ${newOrder.id.slice(-8).toUpperCase()})`,
+              },
+            });
+          }
+        }
 
         return newOrder;
       }
@@ -218,6 +275,25 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Checkout error:", error);
+
+    // Log error to database if possible
+    try {
+      const session = await auth();
+      if (session?.user?.id) {
+        await prisma.log.create({
+          data: {
+            user_id: session.user.id,
+            action: "order_error",
+            message: `Order creation failed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+        });
+      }
+    } catch (logError) {
+      console.error("Failed to log error:", logError);
+    }
+
     return NextResponse.json(
       { error: "Failed to process checkout" },
       { status: 500 }

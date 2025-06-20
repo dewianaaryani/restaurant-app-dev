@@ -124,6 +124,7 @@ export interface Menu {
   image?: string | null;
   is_available: boolean;
   price: number;
+  stock: number;
   created_at: string;
   updated_at: string;
 
